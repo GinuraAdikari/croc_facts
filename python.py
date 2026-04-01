@@ -158,3 +158,56 @@ df_tuned = pd.DataFrame(rows).sort_values("mape").reset_index(drop=True)
 
 top5 = df_tuned.head(5)
 top5
+
+
+
+top3 = ab.sort_values(['score', 'max_mape', 'spread']).head(3).reset_index(drop=True)
+print("Top 3 params:\n", top3[['order','seasonal_order','trend','score','max_mape','spread']])
+
+# ---- 2) Fit 3 SARIMAX models on 2025 residuals and forecast 12 months, then mean ensemble ----
+H = 12
+
+def residual_ensemble_mean(residuals_train_2025, top_params_df, H=12):
+    """
+    Fits SARIMAX for each param row and returns:
+      - resid_fc_mean: (H,) mean residual forecast across models
+      - resid_fc_all:  (N,H) all residual forecasts
+      - fitted_models: list of fitted model objects
+    """
+    resid_fc_list = []
+    fitted_models = []
+
+    for i, r in top_params_df.iterrows():
+        order = tuple(r['order']) if not isinstance(r['order'], tuple) else r['order']
+        seasonal_order = tuple(r['seasonal_order']) if not isinstance(r['seasonal_order'], tuple) else r['seasonal_order']
+        trend = r['trend']
+
+        resid_fc_i, fitted_i = fit_and_forecast_residuals(
+            residuals_train=residuals_train_2025,
+            steps=H,
+            order=order,
+            seasonal_order=seasonal_order,
+            trend=trend,
+        )
+
+        resid_fc_i = np.asarray(resid_fc_i, dtype=float)
+        if resid_fc_i.shape[0] != H:
+            raise ValueError(f"Residual forecast length mismatch for model {i}: {resid_fc_i.shape[0]} != {H}")
+
+        resid_fc_list.append(resid_fc_i)
+        fitted_models.append(fitted_i)
+
+    resid_fc_all = np.vstack(resid_fc_list)          # shape: (N, H)
+    resid_fc_mean = resid_fc_all.mean(axis=0)        # shape: (H,)
+    return resid_fc_mean, resid_fc_all, fitted_models
+
+# --- run ensemble on 2025 residuals ---
+# you must have: residuals_train_2025 (1D series/array)
+resid_fc_ens_mean, resid_fc_all, fitted_models = residual_ensemble_mean(
+    residuals_train_2025=residuals_train_2025,
+    top_params_df=top3,
+    H=H
+)
+
+print("Ensembled residual forecast (mean of top 3):")
+print(resid_fc_ens_mean)
