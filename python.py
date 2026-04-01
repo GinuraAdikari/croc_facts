@@ -149,6 +149,11 @@ for (pp, dd, qq, PP, DD, QQ, tr) in _grid:
 
 print(f"Successful fits: {len(rows)} | Failed fits: {fail_count}")
 
+
+resid_fc, _ = fit_and_forecast_residuals(
+    residuals_train, 12, order=(0,0,0), seasonal_order=(0,0,0,12), trend="n"
+)
+print(resid_fc)
 df_tuned = pd.DataFrame(rows).sort_values("mape").reset_index(drop=True)
 
 top5 = df_tuned.head(5)
